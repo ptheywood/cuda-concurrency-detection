@@ -11,7 +11,7 @@ int main(int argc, char * argv[]){
     const int DEVICE = 0;
     const int BATCHES = 4;
     const int REPEATS = 1;
-    const int TOTAL_ELEMENTS = 2 << 10;
+    const int TOTAL_ELEMENTS = 2 << 20;
     const int SEQUENTIAL_BATCHES = 1;
     const int CONCURRENT_BATCHS = BATCHES;
     // const int TOTAL_ELEMENTS = (2 << 8) + 1;

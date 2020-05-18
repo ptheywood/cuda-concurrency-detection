@@ -231,6 +231,11 @@ void launch(const float a, const int concurrent_batches, const int repeats, bool
                 // Record an event after per stream
                 CUDA_CALL(cudaEventRecord(stop, stream));
                 NVTX_POP();
+
+                // Add an arbitary device sync to break stuff.
+                if (b % 2 == 0){
+                    CUDA_CALL(cudaDeviceSynchronize());
+                }
             }
             // Record an event in the default stream afterwards - this will block though...?
             CUDA_CALL(cudaEventRecord(g_stop));
