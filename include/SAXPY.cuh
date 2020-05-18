@@ -207,6 +207,8 @@ void launch(const float a, const int concurrent_batches, const int repeats, bool
             // Record an event in the default stream before issuing any kernels.
             CUDA_CALL(cudaEventRecord(g_start));
             for(int b = 0; b < batches; b++){
+                // int s = b % concurrent_batches;
+                // printf("b %d, batches %d, concurrent_batches %d, s %d\n", b, batches, concurrent_batches, s);
                 cudaStream_t stream = streams.at(b);
                 if (!use_streams){
                     stream = 0;
