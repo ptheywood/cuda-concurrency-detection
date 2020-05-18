@@ -1,0 +1,62 @@
+Using device 0: GeForce GTX 1070 CC6.1 with 15 multiprocessors
+SAXPY on 2048 elements, in 4 batches, using device 0
+saxpy::launch 1/4
+n 2048, batches 4, batchSize 512, tot 2048
+n=2048. Launching 4 batches of 512 as blockSize 1024 gridSize 1
+b 0 s2s 0.027200, g2g 0.140192 g2s 0.028736 s2g 0.138656
+b 1 s2s 0.033760, g2g 0.140192 g2s 0.073568 s2g 0.100384
+b 2 s2s 0.024576, g2g 0.140192 g2s 0.099264 s2g 0.065504
+b 3 s2s 0.030528, g2g 0.140192 g2s 0.139104 s2g 0.031616
+g2g   est. total 0.560768 mean 0.140192
+s2s events total 0.116064 mean 0.029016
+g2s events total 0.340672 mean 0.085168
+s2g events total 0.336160 mean 0.084040
+---- No streams
+---- Sequential
+saxpy::launch 1/4
+n 2048, batches 4, batchSize 512, tot 2048
+n=2048. Launching 4 batches of 512 as blockSize 1024 gridSize 1
+b 0 s2s 0.030912, g2g 0.128032 g2s 0.038336 s2g 0.120608
+b 1 s2s 0.028608, g2g 0.128032 g2s 0.076224 s2g 0.080416
+b 2 s2s 0.028672, g2g 0.128032 g2s 0.085696 s2g 0.071008
+b 3 s2s 0.028416, g2g 0.128032 g2s 0.126496 s2g 0.029952
+g2g   est. total 0.512128 mean 0.128032
+s2s events total 0.116608 mean 0.029152
+g2s events total 0.326752 mean 0.081688
+s2g events total 0.301984 mean 0.075496
+---- Some Concurrent 2 at a time
+saxpy::launch 2/4
+n 2048, batches 4, batchSize 512, tot 2048
+n=2048. Launching 4 batches of 512 as blockSize 1024 gridSize 1
+b 0 s2s 0.029760, g2g 0.112448 g2s 0.031136 s2g 0.111072
+b 1 s2s 0.028832, g2g 0.112448 g2s 0.067552 s2g 0.073728
+b 2 s2s 0.027360, g2g 0.112448 g2s 0.073632 s2g 0.066176
+b 3 s2s 0.029920, g2g 0.112448 g2s 0.111264 s2g 0.031104
+g2g   est. total 0.449792 mean 0.112448
+s2s events total 0.115872 mean 0.028968
+g2s events total 0.283584 mean 0.070896
+s2g events total 0.282080 mean 0.070520
+---- Some Concurrent 3 at a time
+saxpy::launch 3/4
+n 2048, batches 4, batchSize 512, tot 2048
+n=2048. Launching 4 batches of 512 as blockSize 1024 gridSize 1
+b 0 s2s 0.031424, g2g 0.125312 g2s 0.036192 s2g 0.120544
+b 1 s2s 0.029056, g2g 0.125312 g2s 0.073632 s2g 0.080736
+b 2 s2s 0.028928, g2g 0.125312 g2s 0.083104 s2g 0.071136
+b 3 s2s 0.030688, g2g 0.125312 g2s 0.124128 s2g 0.031872
+g2g   est. total 0.501248 mean 0.125312
+s2s events total 0.120096 mean 0.030024
+g2s events total 0.317056 mean 0.079264
+s2g events total 0.304288 mean 0.076072
+---- Max Conccurency
+saxpy::launch 4/4
+n 2048, batches 4, batchSize 512, tot 2048
+n=2048. Launching 4 batches of 512 as blockSize 1024 gridSize 1
+b 0 s2s 0.029344, g2g 0.106816 g2s 0.030752 s2g 0.105408
+b 1 s2s 0.025952, g2g 0.106816 g2s 0.064224 s2g 0.068544
+b 2 s2s 0.027328, g2g 0.106816 g2s 0.072512 s2g 0.061632
+b 3 s2s 0.025600, g2g 0.106816 g2s 0.105632 s2g 0.026784
+g2g   est. total 0.427264 mean 0.106816
+s2s events total 0.108224 mean 0.027056
+g2s events total 0.273120 mean 0.068280
+s2g events total 0.262368 mean 0.065592
