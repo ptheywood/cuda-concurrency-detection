@@ -1,80 +1,81 @@
 # Build a list of gencode arguments, based on CUDA verison.
-# Accepts user override via SMS
+# Accepts user override via CUDA_ARCH
 
 # Check if any have been provided by the users
-string(LENGTH "${SMS}" SMS_LENGTH)
+string(LENGTH "${CUDA_ARCH}" CUDA_ARCH_LENGTH)
 
 # Define the default compute capabilites incase not provided by the user
-set(DEFAULT_SMS "20;35;50;60;70;80;")
+set(DEFAULT_CUDA_ARCH "20;35;50;60;70;80;")
 
 # Get the valid options for the current compiler.
 # Run nvcc --help to get the help string which contains all valid compute_ sm_ for that version.
 execute_process(COMMAND ${CMAKE_CUDA_COMPILER} "--help" OUTPUT_VARIABLE NVCC_HELP_STR ERROR_VARIABLE NVCC_HELP_STR)
 # Match all comptue_XX or sm_XXs
-string(REGEX MATCHALL "'(sm|compute)_[0-9]+'" SUPPORTED_SMS "${NVCC_HELP_STR}" )
+string(REGEX MATCHALL "'(sm|compute)_[0-9]+'" SUPPORTED_CUDA_ARCH "${NVCC_HELP_STR}" )
 # Strip just the numeric component
-string(REGEX REPLACE "'(sm|compute)_([0-9]+)'" "\\2" SUPPORTED_SMS "${SUPPORTED_SMS}" )
-# Remove dupes and sort to build the correct list of supported sms.
-list(REMOVE_DUPLICATES SUPPORTED_SMS)
-list(REMOVE_ITEM SUPPORTED_SMS "")
-list(SORT SUPPORTED_SMS)
+string(REGEX REPLACE "'(sm|compute)_([0-9]+)'" "\\2" SUPPORTED_CUDA_ARCH "${SUPPORTED_CUDA_ARCH}" )
+# Remove dupes and sort to build the correct list of supported CUDA_ARCH.
+list(REMOVE_DUPLICATES SUPPORTED_CUDA_ARCH)
+list(REMOVE_ITEM SUPPORTED_CUDA_ARCH "")
+list(SORT SUPPORTED_CUDA_ARCH)
 
 # Update defaults to only be those supported
-foreach(SM IN LISTS DEFAULT_SMS)
-    if (NOT SM IN_LIST SUPPORTED_SMS)
-        list(REMOVE_ITEM DEFAULT_SMS "${SM}")
+# @todo might be better to instead do a dry run compilation with each gencode to validate?
+foreach(SM IN LISTS DEFAULT_CUDA_ARCH)
+    if (NOT SM IN_LIST SUPPORTED_CUDA_ARCH)
+        list(REMOVE_ITEM DEFAULT_CUDA_ARCH "${SM}")
     endif()
-    list(REMOVE_DUPLICATES SMS)
-    list(REMOVE_ITEM SMS "")
-    list(SORT SMS)
+    list(REMOVE_DUPLICATES CUDA_ARCH)
+    list(REMOVE_ITEM CUDA_ARCH "")
+    list(SORT CUDA_ARCH)
 endforeach()
 
 
-if(NOT SMS_LENGTH EQUAL 0)
+if(NOT CUDA_ARCH_LENGTH EQUAL 0)
     # Convert user provided string argument to a list.
-    string (REPLACE " " ";" SMS "${SMS}")
-    string (REPLACE "," ";" SMS "${SMS}")
+    string (REPLACE " " ";" CUDA_ARCH "${CUDA_ARCH}")
+    string (REPLACE "," ";" CUDA_ARCH "${CUDA_ARCH}")
 
     # Remove duplicates, empty items and sort.
-    list(REMOVE_DUPLICATES SMS)
-    list(REMOVE_ITEM SMS "")
-    list(SORT SMS)
+    list(REMOVE_DUPLICATES CUDA_ARCH)
+    list(REMOVE_ITEM CUDA_ARCH "")
+    list(SORT CUDA_ARCH)
 
     # Validate the list.
-    foreach(SM IN LISTS SMS)
-        if (NOT SM IN_LIST SUPPORTED_SMS)
-            message(WARNING "Compute Capability ${SM} not supported by CUDA ${CMAKE_CUDA_COMPILER_VERSION} and is being ignored.\nChoose from: ${SUPPORTED_SMS}")
-            list(REMOVE_ITEM SMS "${SM}")
+    foreach(SM IN LISTS CUDA_ARCH)
+        if (NOT SM IN_LIST SUPPORTED_CUDA_ARCH)
+            message(WARNING "Compute Capability ${SM} not supported by CUDA ${CMAKE_CUDA_COMPILER_VERSION} and is being ignored.\nChoose from: ${SUPPORTED_CUDA_ARCH}")
+            list(REMOVE_ITEM CUDA_ARCH "${SM}")
         endif()
     endforeach()
 
-    # @todo - validate that the sms provided are supported by the compiler
+    # @todo - validate that the CUDA_ARCH provided are supported by the compiler
 endif()
 
 # If the list is empty post validation, set it to the (validated) defaults
-list(LENGTH SMS SMS_LENGTH)
-if(SMS_LENGTH EQUAL 0)
-    set(SMS ${DEFAULT_SMS})
+list(LENGTH CUDA_ARCH CUDA_ARCH_LENGTH)
+if(CUDA_ARCH_LENGTH EQUAL 0)
+    set(CUDA_ARCH ${DEFAULT_CUDA_ARCH})
 endif()
 
 # If the list is somehow empty now, do not set any gencodes arguments, instead using the compiler defaults.
-list(LENGTH SMS SMS_LENGTH2)
-if(NOT SMS_LENGTH EQUAL 0)
-    message(STATUS "Using Compute Capabilities: ${SMS}")
+list(LENGTH CUDA_ARCH CUDA_ARCH_LENGTH2)
+if(NOT CUDA_ARCH_LENGTH EQUAL 0)
+    message(STATUS "Using Compute Capabilities: ${CUDA_ARCH}")
     SET(GENCODES_FLAGS)
     SET(MIN_CUDA_ARCH)
     # Convert to gencode arguments
 
-    foreach(SM IN LISTS SMS)
+    foreach(SM IN LISTS CUDA_ARCH)
         set(GENCODES_FLAGS "${GENCODES_FLAGS} -gencode arch=compute_${SM},code=sm_${SM}")
     endforeach()
 
     # Add the last arch again as compute_, compute_ to enable forward looking JIT
-    list(GET SMS -1 LAST_SM)
+    list(GET CUDA_ARCH -1 LAST_SM)
     set(GENCODES_FLAGS "${GENCODES_FLAGS} -gencode arch=compute_${LAST_SM},code=compute_${LAST_SM}")
 
     # Get the minimum device architecture to pass through to nvcc to enable graceful failure prior to cuda execution.
-    list(GET SMS 0 MIN_CUDA_ARCH)
+    list(GET CUDA_ARCH 0 MIN_CUDA_ARCH)
 
     # Set the gencode flags on NVCC
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${GENCODES_FLAGS}")
@@ -85,5 +86,5 @@ if(NOT SMS_LENGTH EQUAL 0)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMIN_COMPUTE_CAPABILITY=${MIN_CUDA_ARCH}")
     SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DMIN_COMPUTE_CAPABILITY=${MIN_CUDA_ARCH}")
 else()
-    message(STATUS "Using default CUDA Compute Capabilities ${SMS}")
+    message(STATUS "Using default CUDA Compute Capabilities ${CUDA_ARCH}")
 endif()
