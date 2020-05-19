@@ -13,7 +13,7 @@ project(cuda-concurrency-detection CUDA CXX)
 #################
 
 # SMS
-SET(SMS "${SMS}" CACHE STRING "compute capabilities to build" FORCE)
+SET(SMS "${SMS}" CACHE STRING "Compute Capabilities to build" FORCE)
 # set_property(SMS PROPERTY HELPSTRING "List of compute capabilities to target. I.e. 61 70")
 
 

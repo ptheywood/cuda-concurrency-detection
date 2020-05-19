@@ -7,7 +7,6 @@ string(LENGTH "${SMS}" SMS_LENGTH)
 # Define the default compute capabilites incase not provided by the user
 set(DEFAULT_SMS "20;35;50;60;70;80;")
 
-
 # Get the valid options for the current compiler.
 # Run nvcc --help to get the help string which contains all valid compute_ sm_ for that version.
 execute_process(COMMAND ${CMAKE_CUDA_COMPILER} "--help" OUTPUT_VARIABLE NVCC_HELP_STR ERROR_VARIABLE NVCC_HELP_STR)
@@ -25,15 +24,21 @@ foreach(SM IN LISTS DEFAULT_SMS)
     if (NOT SM IN_LIST SUPPORTED_SMS)
         list(REMOVE_ITEM DEFAULT_SMS "${SM}")
     endif()
+    list(REMOVE_DUPLICATES SMS)
+    list(REMOVE_ITEM SMS "")
+    list(SORT SMS)
 endforeach()
 
 
 if(NOT SMS_LENGTH EQUAL 0)
-    # Convert user provided to a list.
+    # Convert user provided string argument to a list.
     string (REPLACE " " ";" SMS "${SMS}")
     string (REPLACE "," ";" SMS "${SMS}")
 
-    list(LENGTH SMS SMS_COUNT)
+    # Remove duplicates, empty items and sort.
+    list(REMOVE_DUPLICATES SMS)
+    list(REMOVE_ITEM SMS "")
+    list(SORT SMS)
 
     # Validate the list.
     foreach(SM IN LISTS SMS)
@@ -51,11 +56,6 @@ list(LENGTH SMS SMS_LENGTH)
 if(SMS_LENGTH EQUAL 0)
     set(SMS ${DEFAULT_SMS})
 endif()
-
-# Remove duplicates, empty items and sort in ascending order.
-list(REMOVE_DUPLICATES SMS)
-list(REMOVE_ITEM SMS "")
-list(SORT SMS)
 
 # If the list is somehow empty now, do not set any gencodes arguments, instead using the compiler defaults.
 list(LENGTH SMS SMS_LENGTH2)
@@ -85,5 +85,5 @@ if(NOT SMS_LENGTH EQUAL 0)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMIN_COMPUTE_CAPABILITY=${MIN_CUDA_ARCH}")
     SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DMIN_COMPUTE_CAPABILITY=${MIN_CUDA_ARCH}")
 else()
-    message(STATUS "Using default CUDA ${CMAKE_CUDA_COMPILER_VERSION} Compute Capabilities")
+    message(STATUS "Using default CUDA Compute Capabilities ${SMS}")
 endif()
