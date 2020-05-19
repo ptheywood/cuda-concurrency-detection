@@ -35,25 +35,31 @@ find_path(NVTX_INCLUDE_DIRS
     )
 
 # Find the directory containing the dynamic library
-find_library(NVTX_LIBRARIES
-    NAMES 
-        libnvToolsExt.so
-        nvToolsExt64_1
-        nvToolsExt32_1 
-    HINTS
-        ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
-    PATHS 
-        ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
-    PATH_SUFFIXES
-        lib
-        lib64
-        lib/Win32
-        lib/x64
-)
+# @todo nvtx lives somewhere else on windows! - in C:\Program Files\NVIDIA Corporation\nvToolsExt rather than with the cuda toolkit, although the headers for nvtx3 live with cuda.... is the lib neccesary?
+#  NVTX v3 is a header-only C library? CUDA 10+? - nvtx 
+#if CUDART_VERSION >= 1000 && defined(_WIN32)
+
+# find_library(NVTX_LIBRARIES
+#     NAMES 
+#         libnvToolsExt.so
+#         nvToolsExt64_1
+#         nvToolsExt32_1 
+#     HINTS
+#         ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
+#     PATHS 
+#         ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
+#     PATH_SUFFIXES
+#         lib
+#         lib64
+#         lib/Win32
+#         lib/x64
+# )
 
 # Apply standard cmake find package rules / variables. I.e. QUIET, NVTX_FOUND etc.
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(NVTX DEFAULT_MSG NVTX_INCLUDE_DIRS NVTX_LIBRARIES)
+find_package_handle_standard_args(NVTX DEFAULT_MSG NVTX_INCLUDE_DIRS)
+# find_package_handle_standard_args(NVTX DEFAULT_MSG NVTX_INCLUDE_DIRS NVTX_LIBRARIES)
 
 # Set returned values as advanced?
-mark_as_advanced(NVTX_INCLUDE_DIRS NVTX_LIBRARIES)
+mark_as_advanced(NVTX_INCLUDE_DIRS)
+# mark_as_advanced(NVTX_INCLUDE_DIRS NVTX_LIBRARIES)
