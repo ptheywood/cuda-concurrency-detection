@@ -21,9 +21,9 @@ list(SORT SUPPORTED_CUDA_ARCH)
 
 # Update defaults to only be those supported
 # @todo might be better to instead do a dry run compilation with each gencode to validate?
-foreach(SM IN LISTS DEFAULT_CUDA_ARCH)
-    if (NOT SM IN_LIST SUPPORTED_CUDA_ARCH)
-        list(REMOVE_ITEM DEFAULT_CUDA_ARCH "${SM}")
+foreach(ARCH IN LISTS DEFAULT_CUDA_ARCH)
+    if (NOT ARCH IN_LIST SUPPORTED_CUDA_ARCH)
+        list(REMOVE_ITEM DEFAULT_CUDA_ARCH "${ARCH}")
     endif()
     list(REMOVE_DUPLICATES CUDA_ARCH)
     list(REMOVE_ITEM CUDA_ARCH "")
@@ -42,10 +42,10 @@ if(NOT CUDA_ARCH_LENGTH EQUAL 0)
     list(SORT CUDA_ARCH)
 
     # Validate the list.
-    foreach(SM IN LISTS CUDA_ARCH)
-        if (NOT SM IN_LIST SUPPORTED_CUDA_ARCH)
+    foreach(ARCH IN LISTS CUDA_ARCH)
+        if (NOT ARCH IN_LIST SUPPORTED_CUDA_ARCH)
             message(WARNING "Compute Capability ${SM} not supported by CUDA ${CMAKE_CUDA_COMPILER_VERSION} and is being ignored.\nChoose from: ${SUPPORTED_CUDA_ARCH}")
-            list(REMOVE_ITEM CUDA_ARCH "${SM}")
+            list(REMOVE_ITEM CUDA_ARCH "${ARCH}")
         endif()
     endforeach()
 
@@ -66,20 +66,19 @@ if(NOT CUDA_ARCH_LENGTH EQUAL 0)
     SET(MIN_CUDA_ARCH)
     # Convert to gencode arguments
 
-    foreach(SM IN LISTS CUDA_ARCH)
-        set(GENCODES_FLAGS "${GENCODES_FLAGS} -gencode arch=compute_${SM},code=sm_${SM}")
+    foreach(ARCH IN LISTS CUDA_ARCH)
+        set(GENCODES_FLAGS "${GENCODES_FLAGS} -gencode arch=compute_${ARCH},code=sm_${ARCH}")
     endforeach()
 
     # Add the last arch again as compute_, compute_ to enable forward looking JIT
-    list(GET CUDA_ARCH -1 LAST_SM)
-    set(GENCODES_FLAGS "${GENCODES_FLAGS} -gencode arch=compute_${LAST_SM},code=compute_${LAST_SM}")
+    list(GET CUDA_ARCH -1 LAST_ARCH)
+    set(GENCODES_FLAGS "${GENCODES_FLAGS} -gencode arch=compute_${LAST_ARCH},code=compute_${LAST_ARCH}")
 
     # Get the minimum device architecture to pass through to nvcc to enable graceful failure prior to cuda execution.
     list(GET CUDA_ARCH 0 MIN_CUDA_ARCH)
 
     # Set the gencode flags on NVCC
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${GENCODES_FLAGS}")
-
 
     # Set the minimum arch flags for all compilers
     SET(CMAKE_CC_FLAGS "${CMAKE_C_FLAGS} -DMIN_COMPUTE_CAPABILITY=${MIN_CUDA_ARCH}")
