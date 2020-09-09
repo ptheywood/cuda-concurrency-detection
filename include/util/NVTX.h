@@ -1,21 +1,33 @@
 #ifndef INCLUDE_UTIL_NVTX_H_
 #define INCLUDE_UTIL_NVTX_H_
 
+#include <cstdint>
+
 /**
  * Utility namespace for handling of NVTX profiling markers/ranges, wrapped in macros to avoid performance impact if not enabled.
  * 
  * Macro `USE_NVTX` must be defined to be enabled.
- * Use NVTX_ macros to use. 
+ * Use NVTX_PUSH, NVTX_POP, NVTX_RANGE macros to use.
  */
 
 // If NVTX is enabled, include header, defined namespace / class and macros.
 #if defined(USE_NVTX)
-// Include the header if enabled
+// Include the appropriate header if enabled
+#if USE_NVTX >= 3
+#include "nvtx3/nvToolsExt.h"
+#else
 #include "nvToolsExt.h"
 #endif
+#endif
+
+/* @todo - Make these macros testable.
+   If USE_NVTX is enabled, store static counts of push/pop/range's
+   Make accessors to enable testing the number of counts is as expected
+   Could also include this in a device shutdown method, to report if there is a mismatch of push/pop and therefore an NVTX error.
+*/
 
 namespace util {
-namespace NVTX {
+namespace nvtx {
 
 /**
  * Colour palette for NVTX markers in ARGB format.
@@ -35,7 +47,7 @@ const uint32_t colourCount = sizeof(palette) / sizeof(uint32_t);
  * @see NVTX_PUSH to use with minimal performance impact
  */
 #if defined(USE_NVTX)
-inline void push(const char * label) {
+inline void push(const char *label) {
     // Static variable to track the next colour to be used with auto rotation.
     static uint32_t nextColourIdx = 0;
 
@@ -72,7 +84,7 @@ inline void push(const char *) {
  */
 inline void pop() {
 #if defined(USE_NVTX)
-   nvtxRangePop();
+    nvtxRangePop();
 #endif
 }
 
@@ -81,66 +93,66 @@ inline void pop() {
  * Push at construction, Pop at destruction.
  */
 class NVTXRange {
- public:
+public:
     /**
     * Constuctor which pushes an NVTX marker onto the stack with the specified label
     * @param label the label for the nvtx range.
     * @see NVTX_RANGE to use with minimal performance impact
     */
     explicit NVTXRange(const char *label) {
-        util::NVTX::push(label);
+        util::nvtx::push(label);
     }
     /**
      *  Destructor which pops a marker off the nvtx stack.
      */
     ~NVTXRange() {
-        util::NVTX::pop();
+        util::nvtx::pop();
     }
 };
-};  // namespace nvtx
-};  // namespace util
+}; // namespace nvtx
+}; // namespace util
 
-// If NVTX is enabled, provide macros which actually use NVTX
+// If USE_NVTX is enabled, provide macros which actually use NVTX
 #if defined(USE_NVTX)
 /**
  * Macro which creates a scope-based NVTX range, with auto-popping of the marker.
- * If NVTX is defined, this constructs an nvtx::NVTXRange object with the specified label.
+ * If NVTX is defined, this constructs an util::nvtx::NVTXRange object with the specified label.
  * @param label the label for the NVTX marker.
- * @see nvtx::NVTXRange for implementation details
+ * @see util::nvtx::NVTXRange for implementation details
  */
-#define NVTX_RANGE(label) util::NVTX::NVTXRange uniq_name_using_macros(label)
+#define NVTX_RANGE(label) util::nvtx::NVTXRange uniq_name_using_macros(label)
 /**
  * Macro which pushes an NVTX marker onto the stack, if NVTX is defined.
  * @param label label for the NVTX marker
- * @see nvtx::push for implementation details.
+ * @see util::nvtx::push for implementation details.
  */
-#define NVTX_PUSH(label) util::NVTX::push(label)
+#define NVTX_PUSH(label) util::nvtx::push(label)
 /**
  * Macro which pops an NVTX marker onto the stack, if NVTX is defined.
- * @see nvtx::pop for implementation details.
+ * @see util::nvtx::pop for implementation details.
  */
-#define NVTX_POP() util::NVTX::pop()
+#define NVTX_POP() util::nvtx::pop()
 #else
 // If NVTX is not enabled, provide macros which do nothing and optimise out any arguments.
 // Documentation is for the enabled version for doxygen.
 /**
  * Macro which creates a scope-based NVTX range, with auto-popping of the marker.
- * If NVTX is defined, this constructs an nvtx::NVTXRange object with the specified label.
+ * If NVTX is defined, this constructs an util::nvtx::NVTXRange object with the specified label.
  * @param label the label for the NVTX marker.
- * @see nvtx::NVTXRange for implementation details
+ * @see util::nvtx::NVTXRange for implementation details
  */
 #define NVTX_RANGE(label)
 /**
  * Macro which pushes an NVTX marker onto the stack, if NVTX is defined.
  * @param label label for the NVTX marker
- * @see nvtx::push for implementation details.
+ * @see util::nvtx::push for implementation details.
  */
 #define NVTX_PUSH(label)
 /**
  * Macro which pops an NVTX marker onto the stack, if NVTX is defined.
- * @see nvtx::pop for implementation details.
+ * @see util::nvtx::pop for implementation details.
  */
 #define NVTX_POP()
 #endif
 
-#endif  // INCLUDE_UTIL_NVTX_H_
+#endif // INCLUDE_UTIL_NVTX_H_

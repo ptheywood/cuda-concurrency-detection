@@ -1,6 +1,11 @@
 # Build a list of gencode arguments, based on CUDA verison.
 # Accepts user override via CUDA_ARCH
 
+# CMAKE > 3.18 introduces CUDA_ARCHITECTURES as a cmake-native way of generating gencodes (Policy CMP0104). Set the value to OFF to prevent errors for it being not provided.
+if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18")
+    set(CMAKE_CUDA_ARCHITECTURES "OFF")
+endif()
+
 # Check if any have been provided by the users
 string(LENGTH "${CUDA_ARCH}" CUDA_ARCH_LENGTH)
 

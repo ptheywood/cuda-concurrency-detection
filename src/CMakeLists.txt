@@ -47,10 +47,12 @@ target_include_directories(${EXECUTABLE_NAME} PRIVATE ${INCLUDE_ROOT})
 
 # If NVTX is enabled, set include/link args.
 if(USE_NVTX AND NVTX_FOUND)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DUSE_NVTX")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_NVTX")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DUSE_NVTX=${NVTX_VERSION}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX=${NVTX_VERSION}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_NVTX=${NVTX_VERSION}")
 
     target_include_directories(${EXECUTABLE_NAME} SYSTEM PRIVATE ${NVTX_INCLUDE_DIRS})
-    target_link_libraries(${EXECUTABLE_NAME} ${NVTX_LIBRARIES})
+    if(NVTX_VERSION VERSION_LESS "3")
+        target_link_libraries(${EXECUTABLE_NAME} ${NVTX_LIBRARIES})
+    endif()
 endif()
