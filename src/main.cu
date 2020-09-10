@@ -4,6 +4,24 @@
 #include "util/NVTX.h"
 #include "SAXPY.cuh"
 
+/*
+    General notes on detecting concurrency:
+
+    1. Individual kernels need to take enough time to be accurately measured. I.e. 10/100ms.
+    2. Total problem size (across all streams) should be sufficiently small for the device being used (for higher speedup from concurrency).
+    3. The more streams being used, the more potential concurrency
+    4. Time each group of work multiple times and take an average
+        + Consider dismissing the first timed kernel as this seems to be slower on average (power state?)
+    5. Time against a single non-default stream as a reference, + use a threshold to ensure speedup is non-trivial.
+        + Very larger problems benefit from streams even without significant overlap (imbalance?)
+    6. Only use timing based on default stream events. Stream-based events are unreliable (see nv docs)
+        + I tried using stream based timing, but it did not help.
+    7. If timing differnt kernels with different runtimes, the longest running will take the same duration. Try to balance work between concurrent kernels.
+*/
+
+
+
+
 int main(int argc, char * argv[]){
     NVTX_RANGE("main");
 
@@ -17,9 +35,9 @@ int main(int argc, char * argv[]){
     // For a 1070, kernel uses 1024 threads per block, 15Ms so 30720 is the maximum thread block which is guaranteed to achieve concurrency. 
     // Larger problems shoudl be detectable with concurrency so long as there is atleast some concurrency however.
     // const int TOTAL_ELEMENTS = 1048576;
-    const int TOTAL_ELEMENTS = 65536;
+    // const int TOTAL_ELEMENTS = 65536;
     // const int TOTAL_ELEMENTS = 30720;
-    // const int TOTAL_ELEMENTS = 16384;
+    const int TOTAL_ELEMENTS = 16384;
     // const int TOTAL_ELEMENTS = 2048;
 
 
