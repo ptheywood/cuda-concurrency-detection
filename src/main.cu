@@ -11,12 +11,13 @@ int main(int argc, char * argv[]){
     const int DEVICE = 0;
     const int BATCHES = 4;
     const float A = 2.0f;
+    const int REPEATS = 5;
 
     // Total elements should corerspond to the device in question.
     // For a 1070, kernel uses 1024 threads per block, 15Ms so 30720 is the maximum thread block which is guaranteed to achieve concurrency. 
     // Larger problems shoudl be detectable with concurrency so long as there is atleast some concurrency however.
-    const int TOTAL_ELEMENTS = 1048576;
-    // const int TOTAL_ELEMENTS = 65536;
+    // const int TOTAL_ELEMENTS = 1048576;
+    const int TOTAL_ELEMENTS = 65536;
     // const int TOTAL_ELEMENTS = 30720;
     // const int TOTAL_ELEMENTS = 16384;
     // const int TOTAL_ELEMENTS = 2048;
@@ -37,29 +38,55 @@ int main(int argc, char * argv[]){
     SAXPY::SAXPY saxpy = SAXPY::SAXPY();
     saxpy.allocate(TOTAL_ELEMENTS, BATCHES);
     
+
+    // Get an average reference time.
+    std::vector<float> reference_ms = std::vector<float>();
+    float total_reference_ms = 0.f;
+    for(int i = 0; i < REPEATS + 1; i++){
+        // Launch with a single stream
+        saxpy.launch(A, 1);
+        // Don't time the first launch. 
+        if(i > 0){
+            // Get the elapsed time
+            float ms = saxpy.getElapsedMillis();
+            reference_ms.push_back(ms);
+            total_reference_ms += ms;
+        }
+    }
+    float mean_reference_ms = total_reference_ms / REPEATS;
+
     // Time launching in the default stream.
-    saxpy.launch(A, 1);
     // Get the non-streamed time.
-    float reference_ms = saxpy.getElapsedMillis();
-    printf("reference_ms: %f\n", reference_ms);
+    printf("mean_reference_ms: %f\n", mean_reference_ms);
 
-    // Concurrency is achieved if the batched_ms is less than the reference, with some room for for error (which needs to be relative to the reference runtime?)
-    // Lets say 10%. 
-    const float CONCURRENCY_EPSILON_PERCENT = 0.1;
-    const float concurrency_threshold_time = (1-CONCURRENCY_EPSILON_PERCENT) * reference_ms;
-    printf("concurrency_threshold_ms: %f\n", concurrency_threshold_time);
+    // 1% as a speedup threshold? Or should it be an amount of time?
+    const float speedup_threshold = 1.01;
 
-    printf("---- No streams\n");
     for(int streams_to_use = 1; streams_to_use <= BATCHES; streams_to_use++){
         printf("Launching using %d/%d streams\n", streams_to_use, BATCHES);
-        saxpy.launch(A, streams_to_use);
-        // Get how long the batched time took.
-        float batched_ms = saxpy.getElapsedMillis();
+
+        std::vector<float> batched_ms = std::vector<float>();
+        float total_batched_ms = 0.f;
+        for(int i = 0; i < REPEATS + 1; i++){
+            // Launch with one or more streams
+            saxpy.launch(A, streams_to_use);
+            // Don't time the first launch. 
+            if(i > 0){
+                // Get the elapsed time
+                float ms = saxpy.getElapsedMillis();
+                batched_ms.push_back(ms);
+                total_batched_ms += ms;
+            }
+        }
+        float mean_batched_ms = total_batched_ms / REPEATS;
 
 
-        bool concurrency_achieved = batched_ms < concurrency_threshold_time;
-        printf("batched_ms: %f\n", batched_ms);
-        printf("concurrency achieved? %d\n", concurrency_achieved);
+        float speedup = mean_reference_ms / mean_batched_ms;
+
+
+        bool concurrency_achieved = speedup > speedup_threshold;
+        printf("mean_batched_ms: %f\n", mean_batched_ms);
+        printf("speedup %f, concurrency achieved? %d\n", speedup, concurrency_achieved);
     }
 
     // saxpy.check(1);
