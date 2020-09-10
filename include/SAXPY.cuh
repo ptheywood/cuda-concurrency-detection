@@ -11,9 +11,12 @@
 namespace SAXPY {
 
 // Make the kernel take longer with pointless repetition
-static constexpr const int INNER_REPEATS = 128;
+static constexpr const int INNER_REPEATS = 32768;
 
-__global__ void saxpy_kernel(int n, float a, float *x, float *y, float *z) {
+
+// Do not use const restrict, it makes it too fast.
+// __global__ void saxpy_kernel(const int n, const float a, const float * __restrict__ x, const float * __restrict__ y, float * z) {
+__global__ void saxpy_kernel(const int n, const float a, const float * x, const float * y, float * z) {
     for(int i = threadIdx.x + blockIdx.x * blockDim.x; i < n; i += blockDim.x * gridDim.x){
         for(int r = 0; r < INNER_REPEATS; r++){
             z[i] = a * x[i] + y[i];
@@ -37,10 +40,9 @@ SAXPY() :
     d_y(nullptr),
     d_z(nullptr),
     allocatedLength(0),
-    g_start(),
-    g_stop(),
-    startEvents(std::vector<cudaEvent_t>()),
-    stopEvents(std::vector<cudaEvent_t>()),
+    start({}),
+    stop({}),
+    elapsedMillis(0.f),
     streams(std::vector<cudaStream_t>()) { }
 ~SAXPY() { }
 
@@ -94,19 +96,9 @@ bool allocate(const int n, const int batches) {
         // Create events
         NVTX_PUSH("createEvents");
         
-        
-        CUDA_CALL(cudaEventCreate(&g_start));
-        CUDA_CALL(cudaEventCreate(&g_stop));
-        for(int b = 0; b < batches; b++){
-            cudaEvent_t event;
-            CUDA_CALL(cudaEventCreate(&event));
-            startEvents.push_back(event);
-        }
-        for(int b = 0; b < batches; b++){
-            cudaEvent_t event;
-            CUDA_CALL(cudaEventCreate(&event));
-            stopEvents.push_back(event);
-        }
+        printf("creating events\n");
+        CUDA_CALL(cudaEventCreate(&start));
+        CUDA_CALL(cudaEventCreate(&stop));
         NVTX_POP();
 
 
@@ -135,16 +127,8 @@ void deallocate() {
 
     // Destroy events
     NVTX_PUSH("eventDestroy");
-    for (auto event : stopEvents) {
-        CUDA_CALL(cudaEventDestroy(event));
-    }
-    stopEvents.clear();
-    for (auto event : startEvents) {
-        CUDA_CALL(cudaEventDestroy(event));
-    }
-    startEvents.clear();
-    CUDA_CALL(cudaEventDestroy(g_stop));
-    CUDA_CALL(cudaEventDestroy(g_start));
+    CUDA_CALL(cudaEventDestroy(stop));
+    CUDA_CALL(cudaEventDestroy(start));
     NVTX_POP();
 
     // Destroy streams
@@ -156,9 +140,9 @@ void deallocate() {
     NVTX_POP();
 }
 
-void launch(const float a, const int concurrent_batches, const int repeats, bool use_streams) {
+void launch(const float a, const int streamCount) {
     NVTX_RANGE("saxpy::launch");
-    printf("saxpy::launch %d/%d\n", concurrent_batches, batches);
+    // printf("saxpy::launch %d/%d\n", streamCount, batches);
     this->a = a;
     if(this->allocatedLength > 0){
         size_t size = this->n * sizeof(float);
@@ -182,102 +166,74 @@ void launch(const float a, const int concurrent_batches, const int repeats, bool
             eventMillis.push_back(0.0);
         }
         
-        printf("n %d, batches %d, batchSize %d, tot %d\n", this->n, batches, batchSize, batches * batchSize);
+        // printf("n %d, batches %d, batchSize %d, tot %d\n", this->n, batches, batchSize, batches * batchSize);
         
         int minGridSize = 0;
         int blockSize = 0;
         int gridSize = 0;
         
-        
+        // Query the occupancy calculator to find the launch bounds. 
+        // If the total grid size required is greater than the minGridSize then concurrency will not be possible. 
+        // @todo flag up if concurrency is achievable or not.
         CUDA_CALL(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, ::SAXPY::saxpy_kernel));
 
         // Threads per block needs to be limited to only use a certain number of SMS. 
         // minGridSize is one way of knowing this. I.e. for 1024 threads per block, a 1070 requies 30 grids (15 sms, 2048 threads per sm.)
         
-        int maxGridSizePerBatch = minGridSize / concurrent_batches;
+        // int maxGridSizePerBatch = minGridSize / concurrent_batches;
         gridSize = (batchSize + blockSize - 1) / blockSize;
-        gridSize = std::min(gridSize, maxGridSizePerBatch);
+        // gridSize = std::min(gridSize, maxGridSizePerBatch);
         
         // @todo grid stride? - only launch as many blocks as needed to fill part of the device - i.e. clamp.
         // @topo launching far too many threads at small block sizes (i.e. 1024 threads per block, even when doing multiple blocks.)
 
         printf("n=%d. Launching %d batches of %d as blockSize %d gridSize %d\n", this->n, batches, batchSize, blockSize, gridSize);
         
-        for(int r = 0; r < repeats; r++){
-            // Record an event in the default stream before issuing any kernels.
-            CUDA_CALL(cudaEventRecord(g_start));
-            for(int b = 0; b < batches; b++){
-                // int s = b % concurrent_batches;
-                // printf("b %d, batches %d, concurrent_batches %d, s %d\n", b, batches, concurrent_batches, s);
-                cudaStream_t stream = streams.at(b);
-                if (!use_streams){
-                    stream = 0;
-                }
-                cudaEvent_t start = startEvents.at(b);
-                cudaEvent_t stop = stopEvents.at(b);
-                int offset = b * batchSize;
-                // @todo launching too many threads for the last batch?
-
-                NVTX_PUSH("saxpy_kernel\n");
-                // Record an event before per stream
-                CUDA_CALL(cudaEventRecord(start, stream));
-                ::SAXPY::saxpy_kernel<<<gridSize, blockSize, 0, stream>>>(
-                    batchSize,
-                    a,
-                    this->d_x + offset,
-                    this->d_y + offset,
-                    this->d_z + offset
-                );
-                // Record an event after per stream
-                CUDA_CALL(cudaEventRecord(stop, stream));
-                NVTX_POP();
-
-                // Add an arbitary device sync to break stuff.
-                if (b % 2 == 0){
-                    CUDA_CALL(cudaDeviceSynchronize());
-                }
+        // Record an event in the default stream before issuing any kernels.
+        // Event timing is only reliable in the default stream (i.e. blocking), so time the whole process rather than per stream only. I.e. all layers.
+        CUDA_CALL(cudaEventRecord(start));
+        for(int b = 0; b < batches; b++){
+            // Use the default stream by default.
+            cudaStream_t stream = 0;
+            // If the number of streams to use is atleast 1, fetch the appropraite stream object.
+            if(streamCount > 0) {
+                int streamIdx = b % streamCount;
+                stream = streams.at(streamIdx);
             }
-            // Record an event in the default stream afterwards - this will block though...?
-            CUDA_CALL(cudaEventRecord(g_stop));
+            // Calc the offset into the various arrays for this batch of work.
+            int offset = b * batchSize;
+            // @todo launching too many threads for the last batch?
+            NVTX_PUSH("saxpy_kernel\n");
+            // Record an event before per stream
+            ::SAXPY::saxpy_kernel<<<gridSize, blockSize, 0, stream>>>(
+                batchSize,
+                a,
+                this->d_x + offset,
+                this->d_y + offset,
+                this->d_z + offset
+            );
+            // Record an event after per stream
+            NVTX_POP();
 
-            // Sync each stop evet
-            for(int b = 0; b < batches; b++){
-                cudaEvent_t stop = stopEvents.at(b);
-                CUDA_CALL(cudaEventSynchronize(stop));
-            }
-            CUDA_CALL(cudaEventSynchronize(g_stop));
-
-            float g2g_ms = 0.f;
-            CUDA_CALL(cudaEventElapsedTime(&g2g_ms, g_start, g_stop));
-            // Record the elapsed times
-            float s2s_ms_sum = 0.f;
-            float g2s_ms_sum = 0.f;
-            float s2g_ms_sum = 0.f;
-            for(int b = 0; b < batches; b++){
-                auto start = startEvents.at(b);
-                auto stop = stopEvents.at(b);
-                float ms = eventMillis.at(b);
-                CUDA_CALL(cudaEventElapsedTime(&ms, start, stop));
-                float g2s_ms = 0.f;
-                CUDA_CALL(cudaEventElapsedTime(&g2s_ms, g_start, stop));
-                float s2g_ms = 0.f;
-                CUDA_CALL(cudaEventElapsedTime(&s2g_ms, start, g_stop));
-                
-                s2s_ms_sum += ms;
-                g2s_ms_sum += g2s_ms;
-                s2g_ms_sum += s2g_ms;
-                
-                printf("b %d s2s %f, g2g %f g2s %f s2g %f\n", b, ms, g2g_ms, g2s_ms, s2g_ms);
-            }
-            printf("g2g   est. total %f mean %f\n", g2g_ms*batches, g2g_ms);
-            printf("s2s events total %f mean %f\n", s2s_ms_sum, s2s_ms_sum / batches);
-            printf("g2s events total %f mean %f\n", g2s_ms_sum, g2s_ms_sum / batches);
-            printf("s2g events total %f mean %f\n", s2g_ms_sum, s2g_ms_sum / batches);
+            // Add an arbitary device sync to break stuff.
+            // if (b % 2 == 0){
+            //     CUDA_CALL(cudaDeviceSynchronize());
+            // }
         }
-        CUDA_CALL(cudaDeviceSynchronize());
-        CUDA_CHECK();
+        // Record that all work has been issued by this point.
+        CUDA_CALL(cudaEventRecord(stop));
 
-        // Copy out
+        // Sync the stop event, (i.e. a device sync as in default stream
+        CUDA_CALL(cudaEventSynchronize(stop));
+        // Calculate how long between start and stop events in ms.
+        CUDA_CALL(cudaEventElapsedTime(&elapsedMillis, start, stop));
+
+        // CUDA_CALL(cudaDeviceSynchronize());
+        // CUDA_CHECK();
+
+        // printf("elapsed ms: %f\n", elapsedMillis);
+
+        // Copy out for checking data.
         NVTX_PUSH("d2h");
         CUDA_CALL(cudaMemcpy(h_z, d_z, size, cudaMemcpyDeviceToHost));
         NVTX_POP();
@@ -299,6 +255,10 @@ void check(const int elementsToCheck){
 }
 
 
+float getElapsedMillis(){
+    return this->elapsedMillis;
+}
+
 private:
     int deviceIndex;
     int batches;
@@ -311,10 +271,9 @@ private:
     float * d_y;
     float * d_z;
     int allocatedLength;
-    cudaEvent_t g_start;
-    cudaEvent_t g_stop;
-    std::vector<cudaEvent_t> startEvents;
-    std::vector<cudaEvent_t> stopEvents;
+    cudaEvent_t start;
+    cudaEvent_t stop;
+    float elapsedMillis;
     std::vector<cudaStream_t> streams;
 };
 
