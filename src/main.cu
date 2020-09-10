@@ -27,7 +27,7 @@ int main(int argc, char * argv[]){
 
     // @todo - make this configurable.
     const int DEVICE = 0;
-    const int BATCHES = 4;
+    const int BATCHES = 8;
     const float A = 2.0f;
     const int REPEATS = 5;
 
@@ -36,8 +36,9 @@ int main(int argc, char * argv[]){
     // Larger problems shoudl be detectable with concurrency so long as there is atleast some concurrency however.
     // const int TOTAL_ELEMENTS = 1048576;
     // const int TOTAL_ELEMENTS = 65536;
-    // const int TOTAL_ELEMENTS = 30720;
-    const int TOTAL_ELEMENTS = 16384;
+    const int TOTAL_ELEMENTS = 30720;
+    // const int TOTAL_ELEMENTS = 16384;
+    // const int TOTAL_ELEMENTS = 8192;
     // const int TOTAL_ELEMENTS = 2048;
 
 
