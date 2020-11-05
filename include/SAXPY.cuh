@@ -11,12 +11,21 @@
 namespace SAXPY {
 
 // Make the kernel take longer with pointless repetition
-static constexpr const int INNER_REPEATS = 32768;
+// static constexpr const int INNER_REPEATS = 32768;
+static constexpr const int INNER_REPEATS = 1048576;
 
 
 // Do not use const restrict, it makes it too fast.
 // __global__ void saxpy_kernel(const int n, const float a, const float * __restrict__ x, const float * __restrict__ y, float * z) {
 __global__ void saxpy_kernel(const int n, const float a, const float * x, const float * y, float * z) {
+    for(int i = threadIdx.x + blockIdx.x * blockDim.x; i < n; i += blockDim.x * gridDim.x){
+        for(int r = 0; r < INNER_REPEATS; r++){
+            z[i] = a * x[i] + y[i];
+        }
+    }
+}
+
+__global__ void saxpy_kernel_smem(const int n, const float a, const float * x, const float * y, float * z) {
     for(int i = threadIdx.x + blockIdx.x * blockDim.x; i < n; i += blockDim.x * gridDim.x){
         for(int r = 0; r < INNER_REPEATS; r++){
             z[i] = a * x[i] + y[i];
@@ -139,10 +148,10 @@ void deallocate() {
     streams.clear();
     NVTX_POP();
 }
-
-void launch(const float a, const int streamCount) {
+void launch(const float a, const int streamCount, std::vector<int> gridSizes, std::vector<int> blockSizes, std::vector<size_t> sharedMemoryPerBlockSizes) {
     NVTX_RANGE("saxpy::launch");
-    // printf("saxpy::launch %d/%d\n", streamCount, batches);
+    printf("saxpy::launch %d %d %zu %zu %zu\n", streamCount, batches, gridSizes.size(), blockSizes.size(), sharedMemoryPerBlockSizes.size());
+
     this->a = a;
     if(this->allocatedLength > 0){
         size_t size = this->n * sizeof(float);
@@ -153,65 +162,59 @@ void launch(const float a, const int streamCount) {
         CUDA_CALL(cudaMemcpy(d_y, h_y, size, cudaMemcpyHostToDevice));
         NVTX_POP();
         
-        // Compute batch sizes and therefore kernel args / sizes.
-        int batchSize = ceil(this->n / (float)batches);
-        // Batch size must be a mult of 32? The final batch size will (might) be smaller.
-        int rem32 = batchSize % 32;
-        if (rem32 != 0) {
-            batchSize = batchSize + 32 - rem32;
-        }
-
         std::vector<float> eventMillis = std::vector<float>();
         for(int b = 0; b < batches; b++){
             eventMillis.push_back(0.0);
         }
-        
-        // printf("n %d, batches %d, batchSize %d, tot %d\n", this->n, batches, batchSize, batches * batchSize);
-        
-        int minGridSize = 0;
-        int blockSize = 0;
-        int gridSize = 0;
-        
-        // Query the occupancy calculator to find the launch bounds. 
-        // If the total grid size required is greater than the minGridSize then concurrency will not be possible. 
-        // @todo flag up if concurrency is achievable or not.
-        CUDA_CALL(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, ::SAXPY::saxpy_kernel));
+    
 
-        // Threads per block needs to be limited to only use a certain number of SMS. 
-        // minGridSize is one way of knowing this. I.e. for 1024 threads per block, a 1070 requies 30 grids (15 sms, 2048 threads per sm.)
-        
-        // int maxGridSizePerBatch = minGridSize / concurrent_batches;
-        gridSize = (batchSize + blockSize - 1) / blockSize;
-        // gridSize = std::min(gridSize, maxGridSizePerBatch);
-        
-        // @todo grid stride? - only launch as many blocks as needed to fill part of the device - i.e. clamp.
-        // @topo launching far too many threads at small block sizes (i.e. 1024 threads per block, even when doing multiple blocks.)
-
-        printf("n=%d. Launching %d batches of %d as blockSize %d gridSize %d\n", this->n, batches, batchSize, blockSize, gridSize);
         
         // Record an event in the default stream before issuing any kernels.
         // Event timing is only reliable in the default stream (i.e. blocking), so time the whole process rather than per stream only. I.e. all layers.
         CUDA_CALL(cudaEventRecord(start));
+
+        int offset = 0;
+
+        // Iterate each batch, launching the kernel with the appropriate args.
         for(int b = 0; b < batches; b++){
+            int blockSize = blockSizes.at(b);
+            int gridSize = gridSizes.at(b);
+            size_t sharedBytes = sharedMemoryPerBlockSizes.at(b);
+            int batchSize = blockSize * gridSize;
+            
+            printf("streamCount %d\n", streamCount);
+            
             // Use the default stream by default.
             cudaStream_t stream = 0;
+            int streamIdx = 0;
             // If the number of streams to use is atleast 1, fetch the appropraite stream object.
             if(streamCount > 0) {
-                int streamIdx = b % streamCount;
+                streamIdx = b % streamCount;
                 stream = streams.at(streamIdx);
             }
-            // Calc the offset into the various arrays for this batch of work.
-            int offset = b * batchSize;
+            printf("n=%d. batch %d/%d threads %d blockSize %d gridSize %d smem %zu stream %d %zu\n", this->n, b, batches, batchSize, blockSize, gridSize, sharedBytes, streamIdx, (size_t)stream);
+
             // @todo launching too many threads for the last batch?
             NVTX_PUSH("saxpy_kernel\n");
-            // Record an event before per stream
-            ::SAXPY::saxpy_kernel<<<gridSize, blockSize, 0, stream>>>(
-                batchSize,
-                a,
-                this->d_x + offset,
-                this->d_y + offset,
-                this->d_z + offset
-            );
+
+            if(sharedBytes > 0) {
+                ::SAXPY::saxpy_kernel_smem<<<gridSize, blockSize, sharedBytes, stream>>>(
+                    batchSize,
+                    a,
+                    this->d_x + offset,
+                    this->d_y + offset,
+                    this->d_z + offset
+                );
+            } else {
+                ::SAXPY::saxpy_kernel<<<gridSize, blockSize, 0, stream>>>(
+                    batchSize,
+                    a,
+                    this->d_x + offset,
+                    this->d_y + offset,
+                    this->d_z + offset
+                );
+            }
+            CUDA_CHECK();
             // Record an event after per stream
             NVTX_POP();
 
@@ -219,6 +222,9 @@ void launch(const float a, const int streamCount) {
             // if (b % 2 == 0){
             //     CUDA_CALL(cudaDeviceSynchronize());
             // }
+
+            // Update the offset for the next batch
+            offset += batchSize;
         }
         // Record that all work has been issued by this point.
         CUDA_CALL(cudaEventRecord(stop));
